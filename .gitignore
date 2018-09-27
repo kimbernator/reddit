@@ -239,3 +239,5 @@ build/
 dist/
 .DS_Store
 
+bot4.py
+bot3.py
