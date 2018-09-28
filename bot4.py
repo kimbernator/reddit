@@ -44,7 +44,7 @@ import praw
 
 CONTACT_INFO = ''
 USERAGENT = 'xxx'
-APP_ID = 'xxx'
+APP_ID = 'butt'
 APP_SECRET = 'xxx'
 APP_URI = 'xxx'
 APP_REFRESH = 'xxx'

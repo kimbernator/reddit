@@ -1,6 +1,8 @@
 import os
 import sqlite3
 import types
+import mysql.connector
+from settings import db_host, db_user, db_password, db_schema
 
 from . import common
 from . import exceptions
@@ -25,6 +27,55 @@ DB_FORMATS_USER = [
     '.\\databases\\@{name}.db',
     '.\\users\\@{name}\\@{name}.db',
 ]
+
+DB_INIT_COMMENTS_MYSQL = ('CREATE TABLE IF NOT EXISTS comments( '
+    'idint BIGINT(11) NOT NULL,'
+    'idstr TEXT,'
+    'created INTEGER,'
+    'author VARCHAR(20),'
+    'parent TEXT,'
+    'submission TEXT,'
+    'body TEXT,'
+    'score INTEGER,'
+    'subreddit TEXT,'
+    'distinguish TEXT,'
+    'textlen INTEGER,'
+    'PRIMARY KEY (idint),'
+    'FULLTEXT idx (author))'
+    'ENGINE=InnoDB;')
+
+DB_INIT_SUBMISSIONS_MYSQL = ('CREATE TABLE IF NOT EXISTS submissions( '
+    'idint BIGINT(11) NOT NULL,'
+    'idstr TEXT,'
+    'created INTEGER,'
+    'self INTEGER,'
+    'nsfw INTEGER,'
+    'author VARCHAR(20),'
+    'title TEXT,'
+    'url TEXT,'
+    'selftext TEXT,'
+    'score INTEGER,'
+    'subreddit TEXT,'
+    'distinguish TEXT,'
+    'textlen INTEGER,'
+    'num_comments INTEGER,'
+    'flair_text TEXT,'
+    'flair_css_class TEXT,'
+    'augmented_at INT,'
+    'augmented_count INT,'
+    'PRIMARY KEY (idint),'
+    'FULLTEXT idx (author))'
+    'ENGINE=InnoDB;')
+
+DB_ENTRY_COMMENTS_1 = ("INSERT INTO comments "
+           "(idint, idstr, created, author, parent, submission, body, score, subreddit, distinguish, textlen) VALUES ")
+
+DB_ENTRY_COMMENTS_2 = "({idint!r}, {idstr!r}, {created!r}, {author}, {parent!r}, {submission!r}, {body!r}, {score!r}, {subreddit!r}, {distinguish!r}, {textlen!r})"
+
+DB_ENTRY_SUBMISSIONS_1 = ("INSERT INTO submissions "
+           "(idint, idstr, created, author, parent, submission, body, score, subreddit, distinguish, textlen) VALUES ")
+
+DB_ENTRY_SUBMISSIONS_2 = "({idint!r}, {idstr!r}, {created!r}, {author}, {parent!r}, {submission!r}, {body!r}, {score!r}, {subreddit!r}, {distinguish!r}, {textlen!r})"
 
 DB_INIT = '''
 CREATE TABLE IF NOT EXISTS submissions(
@@ -103,6 +154,58 @@ SQL_COMMENT_COLUMNS = [
 SQL_SUBMISSION = {key:index for (index, key) in enumerate(SQL_SUBMISSION_COLUMNS)}
 SQL_COMMENT = {key:index for (index, key) in enumerate(SQL_COMMENT_COLUMNS)}
 
+class TSDB_MySQL:
+    def __init__(self):
+        self.conn = mysql.connector.Connect(host=db_host,user=db_user,password=db_password,database=db_schema)
+        self.cursor = self.conn.cursor(buffered=True)
+
+    def init_comments(self):
+        self.cursor.execute('SET NAMES utf8mb4;')
+        self.cursor.execute(DB_INIT_COMMENTS)
+        self.conn.commit()
+
+    def init_submissions(self):
+        self.cursor.execute('SET NAMES utf8mb4;')
+        self.cursor.execute(DB_INIT_SUBMISSIONS)
+        self.conn.commit()
+
+    def insert_comment(self, data_forms):
+        dflist = []
+        for data_form in data_forms:
+            dflist.append((DB_ENTRY_COMMENTS_2.format(**data_form)))
+        execstring = DB_ENTRY_COMMENTS_1+(",\n".join(dflist))+";"
+        self.cursor.execute(execstring)
+
+    def insert_submission(self, data_forms):
+        dflist = []
+        for data_form in data_forms:
+            dflist.append((DB_ENTRY_SUBMISSIONS_2.format(**data_form)))
+        execstring = DB_ENTRY_SUBMISSIONS_1+(",\n".join(dflist))+";"
+        cursor.execute(execstring)
+
+    def insert(self, objects, commit=True):
+        if not isinstance(objects, (list, tuple, types.GeneratorType)):
+            objects = [objects]
+
+        new_values = {
+            'new_submissions': 0,
+            'new_comments': 0,
+        }
+        methods = {
+            common.praw.models.Submission: (self.insert_submission, 'new_submissions'),
+            common.praw.models.Comment: (self.insert_comment, 'new_comments'),
+        }
+        for obj in objects:
+            (method, key) = methods.get(type(obj), (None, None))
+            if method is None:
+                raise TypeError('Unsupported', type(obj), obj)
+            status = method(obj)
+            new_values[key] += status
+
+        if commit:
+            self.conn.commit()
+
+        return new_values
 
 class TSDB:
     def __init__(self, filepath, do_create=True):
