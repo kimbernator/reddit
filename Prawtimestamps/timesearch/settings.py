@@ -1,5 +1,5 @@
 # Database settings
-db_host = ''
+dkdb_host = ''
 db_user = ''
 db_password = ''
 db_schema = ''
